@@ -405,20 +405,43 @@ export default function App() {
 
   const aiStatusText = backupAiMode ? 'Backup AI is active to keep the conversation going.' : 'Primary AI is active for the main voice flow.';
 
+  const LogoMark = () => (
+    <svg
+      viewBox="0 0 80 80"
+      className="h-11 w-11 drop-shadow-[0_0_18px_rgba(45,212,191,0.35)]"
+      aria-label="SPILL IT logo"
+      role="img"
+    >
+      <defs>
+        <linearGradient id="spillit-gradient" x1="0%" x2="100%" y1="0%" y2="100%">
+          <stop offset="0%" stopColor="#5eead4" />
+          <stop offset="50%" stopColor="#2dd4bf" />
+          <stop offset="100%" stopColor="#0f172a" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="10" width="64" height="52" rx="16" fill="url(#spillit-gradient)" opacity="0.95" />
+      <path d="M22 26C22 20.477 26.477 16 32 16H48C53.523 16 58 20.477 58 26V35C58 40.523 53.523 45 48 45H35L24 54V45C22.895 45 22 44.105 22 43V26Z" fill="#f8fafc" opacity="0.96" />
+      <path d="M30 22.5h20M30 30h16M30 37.5h10" stroke="#0f172a" strokeWidth="2.8" strokeLinecap="round" />
+      <path d="M52 52C54.3 52 56.2 54.1 56.2 56.5C56.2 59 54.2 61 52 61C49.8 61 47.8 59.1 47.8 56.5C47.8 54.1 49.8 52 52 52Z" fill="#f8fafc" opacity="0.9" />
+    </svg>
+  );
+
   return (
     <div
       className={`min-h-screen flex flex-col font-sans selection:bg-teal-500/30 selection:text-teal-200 ${
-        highContrast ? 'bg-slate-950 text-slate-50' : 'bg-slate-950 text-slate-100'
+        highContrast ? 'bg-slate-950 text-slate-50' : 'bg-[radial-gradient(circle_at_top,_rgba(15,118,110,0.22),_transparent_34%),linear-gradient(180deg,#020817_0%,#0b1120_32%,#020817_100%)] text-slate-100'
       }`}
       style={{ fontSize: largeText ? '1.08rem' : undefined }}
     >
-      <header className="w-full px-4 pt-4 pb-1">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 shadow-[0_0_0_1px_rgba(15,23,42,0.8),0_18px_48px_rgba(15,118,110,0.08)] backdrop-blur-md">
+      <header className="w-full px-4 pt-5 pb-2">
+        <div className="mx-auto max-w-6xl rounded-[24px] border border-slate-700/80 bg-slate-900/80 px-4 py-3 shadow-[0_20px_60px_rgba(15,118,110,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <div className={`h-2.5 w-2.5 rounded-full ${backupAiMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-teal-500/40 bg-slate-950/80 shadow-[0_0_20px_rgba(45,212,191,0.2)]">
+                <LogoMark />
+              </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">AI status</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400">SPILL IT</div>
                 <div className="text-xs text-slate-200">{aiStatusText}</div>
               </div>
             </div>
@@ -435,8 +458,8 @@ export default function App() {
                 }
                 className={`rounded-xl border px-3 py-1.5 text-[11px] font-medium transition ${
                   voiceEngine === 'filipino_native' || voiceEngine === 'filipino_ai'
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                    : 'border-slate-700 bg-slate-950/70 text-slate-300'
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.14)]'
+                    : 'border-slate-700 bg-slate-950/80 text-slate-300'
                 }`}
               >
                 {voiceEngine === 'filipino_native'
@@ -446,11 +469,11 @@ export default function App() {
                   : 'Gemini Studio'}
               </button>
 
-              <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] text-slate-300">
+              <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] text-slate-300">
                 Mood: {selectedMood}
               </span>
 
-              <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] text-slate-300">
+              <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] text-slate-300">
                 Audio: {isSpeaking ? 'Speaking' : isListening ? 'Listening' : 'Idle'}
               </span>
             </div>
@@ -458,48 +481,57 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-start w-full py-4 pb-12">
-        {/* 1. Character Selector on Main Screen */}
-        <CharacterSelector
-          selectedCharacterId={selectedCharacter.id}
-          onSelectCharacter={handleSelectCharacter}
-        />
+      <main className="flex-1 w-full py-4 pb-12">
+        <div className="mx-auto w-full max-w-6xl px-4">
+          <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-[0_18px_56px_rgba(15,23,42,0.28)] backdrop-blur-md">
+                <CharacterSelector
+                  selectedCharacterId={selectedCharacter.id}
+                  onSelectCharacter={handleSelectCharacter}
+                />
+              </div>
 
-        {/* 2. Prominent Speaking Avatar on Main Screen */}
-        <SpeakingAvatar
-          character={selectedCharacter}
-          isSpeaking={isSpeaking}
-          isListening={isListening}
-          isThinking={isThinking}
-          isVoiceCallMode={isVoiceCallMode}
-          onToggleVoiceCall={handleToggleVoiceCall}
-          onReplaySpeech={handleReplaySpeech}
-          onStopSpeech={handleStopSpeech}
-          currentSpeechText={currentSpeechText}
-          adviceSummary={latestAdviceSummary}
-          detectedLanguage={latestDetectedLanguage}
-          autoSpeak={autoSpeak}
-          onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
-          selectedMood={selectedMood}
-          voiceSettings={voiceSettings}
-          memorySummary={`${Math.min(messages.length, 6)} recent context items`}
-          backupAiMode={backupAiMode}
-          highContrast={highContrast}
-        />
+              <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-[0_18px_56px_rgba(15,23,42,0.28)] backdrop-blur-md">
+                <SpeakingAvatar
+                  character={selectedCharacter}
+                  isSpeaking={isSpeaking}
+                  isListening={isListening}
+                  isThinking={isThinking}
+                  isVoiceCallMode={isVoiceCallMode}
+                  onToggleVoiceCall={handleToggleVoiceCall}
+                  onReplaySpeech={handleReplaySpeech}
+                  onStopSpeech={handleStopSpeech}
+                  currentSpeechText={currentSpeechText}
+                  adviceSummary={latestAdviceSummary}
+                  detectedLanguage={latestDetectedLanguage}
+                  autoSpeak={autoSpeak}
+                  onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
+                  selectedMood={selectedMood}
+                  voiceSettings={voiceSettings}
+                  memorySummary={`${Math.min(messages.length, 6)} recent context items`}
+                  backupAiMode={backupAiMode}
+                  highContrast={highContrast}
+                />
+              </div>
+            </div>
 
-        {/* 3. Problem Conversation Feed on Main Screen */}
-        <ProblemChatFeed
-          character={selectedCharacter}
-          messages={messages}
-          onSendMessage={handleSendProblem}
-          isLoading={isThinking}
-          isDictating={isListening && !isVoiceCallMode}
-          onToggleDictation={handleToggleDictation}
-          onPlayMessageVoice={(msg) => {
-            const targetChar = FAMILY_CHARACTERS.find((c) => c.id === msg.characterId) || selectedCharacter;
-            playCharacterVoice(msg.content, targetChar, msg.detectedLanguage, msg.emotionDetected);
-          }}
-        />
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-[0_18px_56px_rgba(15,23,42,0.28)] backdrop-blur-md">
+              <ProblemChatFeed
+                character={selectedCharacter}
+                messages={messages}
+                onSendMessage={handleSendProblem}
+                isLoading={isThinking}
+                isDictating={isListening && !isVoiceCallMode}
+                onToggleDictation={handleToggleDictation}
+                onPlayMessageVoice={(msg) => {
+                  const targetChar = FAMILY_CHARACTERS.find((c) => c.id === msg.characterId) || selectedCharacter;
+                  playCharacterVoice(msg.content, targetChar, msg.detectedLanguage, msg.emotionDetected);
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );

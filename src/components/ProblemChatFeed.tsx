@@ -45,10 +45,16 @@ export const ProblemChatFeed: React.FC<ProblemChatFeedProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-4 flex flex-col">
-      {/* Quick Problem Prompt Suggestions */}
+    <div className="w-full flex flex-col">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Conversation</div>
+          <h2 className="mt-1 text-lg font-semibold text-slate-50">Talk it through</h2>
+        </div>
+      </div>
+
       {messages.length <= 2 && (
-        <div className="mb-4">
+        <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
           <p className="text-[11px] text-slate-400 mb-2 font-medium">
             Common problems you can talk about with {character.name}:
           </p>
@@ -57,7 +63,7 @@ export const ProblemChatFeed: React.FC<ProblemChatFeedProps> = ({
               <button
                 key={i}
                 onClick={() => onSendMessage(prob)}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 hover:border-teal-500/40 hover:text-teal-300 transition"
+                className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-300 hover:border-teal-500/40 hover:text-teal-300 transition"
               >
                 "{prob}"
               </button>
@@ -66,8 +72,7 @@ export const ProblemChatFeed: React.FC<ProblemChatFeedProps> = ({
         </div>
       )}
 
-      {/* Messages Stream */}
-      <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">
+      <div className="space-y-4 max-h-[430px] overflow-y-auto pr-1 scrollbar-thin scrollbar-track-slate-900 scrollbar-thumb-slate-700">
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
           return (
@@ -137,7 +142,7 @@ export const ProblemChatFeed: React.FC<ProblemChatFeedProps> = ({
       </div>
 
       {/* Input Composer */}
-      <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-2 shadow-xl backdrop-blur-md">
+      <div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950/80 p-2 shadow-[0_12px_30px_rgba(2,6,23,0.28)] backdrop-blur-md">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           {/* Microphone Dictation Button */}
           <button
