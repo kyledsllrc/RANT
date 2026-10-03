@@ -1,0 +1,10 @@
+{
+  "name": "AuraCare - Empathetic Voice & Crisis Wellness Sanctuary",
+  "description": "Real-time AI voice and chat mental wellness companion with sentiment analysis, crisis detection, end-to-end encrypted privacy, and emotional recovery dashboard.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
