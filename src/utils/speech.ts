@@ -412,6 +412,41 @@ export interface SynthesisOptions {
   characterId?: string;
   detectedLanguage?: string;
   emotionDetected?: string;
+  mood?: string;
+  voiceSettings?: {
+    speed?: number;
+    pitch?: number;
+    warmth?: number;
+    accent?: 'filipino' | 'english' | 'neutral';
+  };
+}
+
+export interface CharacterVoiceConfig {
+  gender: 'female' | 'male';
+  voiceNames: string[];
+}
+
+export function resolveCharacterVoiceConfig(characterId?: string, detectedLanguage?: string): CharacterVoiceConfig {
+  const normalized = (characterId || 'woman').toLowerCase();
+  const isFemale =
+    normalized === 'woman' ||
+    normalized === 'grandma' ||
+    normalized === 'mother' ||
+    normalized === 'daughter';
+
+  const tagalog = (detectedLanguage || '').toLowerCase().includes('tagalog') || (detectedLanguage || '').toLowerCase().includes('filipino');
+
+  if (isFemale) {
+    return {
+      gender: 'female',
+      voiceNames: tagalog ? ['Kore', 'Samantha', 'Google UK English Female', 'Google US English Female'] : ['Kore', 'Samantha', 'Google UK English Female'],
+    };
+  }
+
+  return {
+    gender: 'male',
+    voiceNames: tagalog ? ['Fenrir', 'Zephyr', 'Google UK English Male', 'Google US English Male'] : ['Fenrir', 'Zephyr', 'Google UK English Male'],
+  };
 }
 
 /**
@@ -454,12 +489,29 @@ export async function speakWithBrowserSynthesis(
   const langSpec = resolveLanguageSpec(options?.detectedLanguage, formattedText);
   utterance.lang = langSpec.code;
 
-  // Character specific vocal cadence: Woman vs Man
-  const charId = (options?.characterId || 'woman').toLowerCase();
-  const isFemale = charId === 'woman' || charId === 'grandma' || charId === 'mother' || charId === 'daughter';
+  const voiceProfile = resolveCharacterVoiceConfig(options?.characterId, options?.detectedLanguage);
+  const isFemale = voiceProfile.gender === 'female';
+  const speedMultiplier = options?.voiceSettings?.speed ?? 1;
+  const pitchMultiplier = options?.voiceSettings?.pitch ?? 1;
+  const warmthBoost = options?.voiceSettings?.warmth ?? 1;
+  const mood = (options?.mood || 'supportive').toLowerCase();
 
-  let rate = isFemale ? 0.92 : 0.84;
-  let pitch = isFemale ? 1.05 : 0.76;
+  let rate = (isFemale ? 0.92 : 0.84) * speedMultiplier;
+  let pitch = (isFemale ? 1.05 : 0.76) * pitchMultiplier;
+
+  if (mood === 'firm') {
+    rate *= 0.96;
+    pitch *= 0.98;
+  } else if (mood === 'calm') {
+    rate *= 0.9;
+    pitch *= 1.02;
+  } else if (mood === 'playful') {
+    rate *= 1.08;
+    pitch *= 1.06;
+  } else if (mood === 'comforting') {
+    rate *= 0.94;
+    pitch *= 1.04;
+  }
 
   // Emotional Modulation: dynamically tune voice to emotional distress
   const em = (options?.emotionDetected || '').toLowerCase();
@@ -493,8 +545,12 @@ export async function speakWithBrowserSynthesis(
     rate = Math.max(0.78, rate - 0.03);
   }
 
-  utterance.rate = rate;
-  utterance.pitch = pitch;
+  utterance.rate = Math.min(Math.max(rate, 0.7), 1.7);
+  utterance.pitch = Math.min(Math.max(pitch, 0.5), 2);
+
+  if (warmthBoost >= 1.1) {
+    utterance.volume = 1;
+  }
 
   // Load voices reliably
   const voices = await getLoadedVoices();
@@ -510,23 +566,30 @@ export async function speakWithBrowserSynthesis(
   });
 
   if (matchingVoices.length > 0) {
-    // Select voice matching gender / character preference
-    const genderedVoice = matchingVoices.find((v) => {
-      const name = v.name.toLowerCase();
-      if (isFemale) {
-        return (
-          name.includes('female') ||
-          name.includes('woman') ||
-          name.includes('girl') ||
-          name.includes('blessica') ||
-          name.includes('maria') ||
-          name.includes('monica') ||
-          name.includes('paulina') ||
-          name.includes('rosa') ||
-          name.includes('gadis') ||
-          name.includes('siti')
-        );
-      } else {
+    const preferredVoiceNames = voiceProfile.voiceNames.map((name) => name.toLowerCase());
+    const characterSpecificVoice =
+      matchingVoices.find((v) =>
+        preferredVoiceNames.some((preferredName) =>
+          v.name.toLowerCase().includes(preferredName) || v.lang.toLowerCase().includes(preferredName)
+        )
+      ) ||
+      matchingVoices.find((v) => {
+        const name = v.name.toLowerCase();
+        if (isFemale) {
+          return (
+            name.includes('female') ||
+            name.includes('woman') ||
+            name.includes('girl') ||
+            name.includes('blessica') ||
+            name.includes('maria') ||
+            name.includes('monica') ||
+            name.includes('paulina') ||
+            name.includes('rosa') ||
+            name.includes('gadis') ||
+            name.includes('siti')
+          );
+        }
+
         return (
           name.includes('male') ||
           name.includes('man') ||
@@ -536,10 +599,9 @@ export async function speakWithBrowserSynthesis(
           name.includes('diego') ||
           name.includes('budi')
         );
-      }
-    });
+      });
 
-    const selectedVoice = genderedVoice || matchingVoices[0];
+    const selectedVoice = characterSpecificVoice || matchingVoices[0];
     utterance.voice = selectedVoice;
     utterance.lang = selectedVoice.lang;
   } else {

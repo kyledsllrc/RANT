@@ -1,6 +1,60 @@
 import React from 'react';
 import { Volume2, VolumeX, Sparkles, Mic, PhoneCall, PhoneOff } from 'lucide-react';
-import { CharacterProfile } from '../types';
+import { CharacterProfile, CharacterMood, VoiceSettings } from '../types';
+
+const CartoonBadge: React.FC<{ character: CharacterProfile; sizeClassName?: string }> = ({
+  character,
+  sizeClassName = 'h-9 w-9',
+}) => {
+  const isWoman = character.id === 'woman';
+
+  return (
+    <div className={`relative flex items-center justify-center overflow-hidden rounded-full border border-slate-700 bg-slate-950/90 shadow-md ${sizeClassName}`}>
+      <svg viewBox="0 0 64 64" className="h-full w-full" aria-label={character.name} role="img">
+        <circle cx="32" cy="24" r="13" fill={isWoman ? '#f9c7d5' : '#b8d7ff'} stroke="#f8fafc" strokeWidth="2" />
+        <path
+          d={
+            isWoman
+              ? 'M22 22c2-10 18-10 22 0v3H22v-3Z'
+              : 'M18 22c2-8 26-8 28 1v4H18v-5Z'
+          }
+          fill={isWoman ? '#392435' : '#1f3a5f'}
+        />
+        {isWoman ? (
+          <>
+            <circle cx="27" cy="24" r="1.2" fill="#1f2937" />
+            <circle cx="37" cy="24" r="1.2" fill="#1f2937" />
+            <path d="M28 29c2 2 6 2 8 0" stroke="#1f2937" strokeWidth="2" strokeLinecap="round" fill="none" />
+            <path d="M22 46c2-8 7-12 10-12s8 4 10 12" fill={isWoman ? '#fda4af' : '#93c5fd'} />
+            <path d="M24 40h16v8H24z" fill={isWoman ? '#f9a8d4' : '#7dd3fc'} opacity="0.7" />
+          </>
+        ) : (
+          <>
+            <circle cx="27" cy="24" r="1.2" fill="#1f2937" />
+            <circle cx="37" cy="24" r="1.2" fill="#1f2937" />
+            <path d="M28 29c2 2 6 2 8 0" stroke="#1f2937" strokeWidth="2" strokeLinecap="round" fill="none" />
+            <path d="M20 46c3-8 7-12 12-12s9 4 12 12" fill="#93c5fd" />
+            <path d="M25 42h14v8H25z" fill="#1d4ed8" opacity="0.9" />
+          </>
+        )}
+      </svg>
+    </div>
+  );
+};
+
+const VoiceWave: React.FC<{ active: boolean; accentClass: string }> = ({ active, accentClass }) => (
+  <div className="flex h-4 items-end gap-1">
+    {[0.6, 1, 0.7, 1.2, 0.8, 1.4, 0.9, 1.1, 0.75].map((height, index) => (
+      <span
+        key={index}
+        className={`w-1 rounded-full transition-all duration-300 ${active ? accentClass : 'bg-slate-600'} ${
+          active ? 'animate-pulse' : ''
+        }`}
+        style={{ height: `${height * 10}px`, animationDelay: `${index * 80}ms` }}
+      />
+    ))}
+  </div>
+);
 
 interface SpeakingAvatarProps {
   character: CharacterProfile;
@@ -16,6 +70,11 @@ interface SpeakingAvatarProps {
   detectedLanguage?: string;
   autoSpeak: boolean;
   onToggleAutoSpeak: () => void;
+  selectedMood?: CharacterMood;
+  voiceSettings?: VoiceSettings;
+  memorySummary?: string;
+  backupAiMode?: boolean;
+  highContrast?: boolean;
 }
 
 export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
@@ -32,6 +91,11 @@ export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
   detectedLanguage,
   autoSpeak,
   onToggleAutoSpeak,
+  selectedMood = 'supportive',
+  voiceSettings,
+  memorySummary,
+  backupAiMode = true,
+  highContrast = false,
 }) => {
   return (
     <div className="relative flex flex-col items-center justify-center text-center p-4">
@@ -92,9 +156,9 @@ export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
             }`}
           />
 
-          {/* Emoji Badge overlay */}
-          <div className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-slate-950/90 text-xl border border-slate-700 shadow-md">
-            {character.avatarIcon}
+          {/* Cartoon badge overlay */}
+          <div className="absolute bottom-2 right-2">
+            <CartoonBadge character={character} sizeClassName="h-9 w-9" />
           </div>
 
           {/* Thinking overlay */}
@@ -110,18 +174,14 @@ export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
       <div className="z-10 mt-1 flex items-center gap-2">
         {isSpeaking ? (
           <div className="flex items-center gap-1.5 rounded-full bg-slate-900/90 border border-slate-700 px-3.5 py-1 shadow-sm">
-            <span className="flex items-center gap-0.5 h-3">
-              <span className="h-2 w-1 bg-teal-400 animate-pulse rounded-full" />
-              <span className="h-4 w-1 bg-teal-300 animate-pulse delay-75 rounded-full" />
-              <span className="h-3 w-1 bg-emerald-400 animate-pulse delay-150 rounded-full" />
-            </span>
+            <VoiceWave active={true} accentClass="bg-gradient-to-t from-teal-400 to-emerald-300" />
             <span className={`text-xs font-semibold ${character.color.accent}`}>
               {character.name} is speaking...
             </span>
           </div>
         ) : isListening ? (
           <div className="flex items-center gap-1.5 rounded-full bg-emerald-950/80 border border-emerald-600/40 px-3.5 py-1 shadow-sm">
-            <Mic className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+            <VoiceWave active={true} accentClass="bg-gradient-to-t from-emerald-400 to-teal-300" />
             <span className="text-xs font-semibold text-emerald-300">Listening to you... speak freely</span>
           </div>
         ) : isThinking ? (
@@ -140,13 +200,21 @@ export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
       {/* Spoken Quote / Subtitle Card */}
       <div className="z-10 mt-4 w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900/85 p-4 sm:p-5 text-left backdrop-blur-md shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2 text-xs text-slate-400">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`font-semibold ${character.color.accent}`}>{character.name}</span>
             <span className="text-slate-500">•</span>
             <span>{character.role}</span>
             {detectedLanguage && (
               <span className="ml-1 rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[10px] text-teal-300 font-medium">
                 🌐 {detectedLanguage}
+              </span>
+            )}
+            <span className="ml-1 rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-[10px] text-violet-300 font-medium">
+              Mood: {selectedMood}
+            </span>
+            {voiceSettings && (
+              <span className="ml-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300 font-medium">
+                {voiceSettings.speed.toFixed(1)}x / {voiceSettings.pitch.toFixed(1)}p / {voiceSettings.warmth.toFixed(1)}w
               </span>
             )}
           </div>
@@ -189,6 +257,20 @@ export const SpeakingAvatar: React.FC<SpeakingAvatarProps> = ({
         <p className="text-sm sm:text-base text-slate-100 leading-relaxed font-serif italic">
           "{currentSpeechText}"
         </p>
+
+        {detectedLanguage && (
+          <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-300">
+            <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
+              {memorySummary || 'Context memory on'}
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
+              {backupAiMode ? 'Backup AI active' : 'Primary AI active'}
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
+              {highContrast ? 'High contrast' : 'Standard contrast'}
+            </span>
+          </div>
+        )}
 
         {/* Advice key takeaway banner */}
         {adviceSummary && (

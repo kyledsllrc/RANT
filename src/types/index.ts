@@ -1,4 +1,12 @@
 export type CharacterId = 'woman' | 'man';
+export type CharacterMood = 'calm' | 'comforting' | 'firm' | 'playful' | 'supportive' | 'angry';
+
+export interface VoiceSettings {
+  speed: number;
+  pitch: number;
+  warmth: number;
+  accent: 'filipino' | 'english' | 'neutral';
+}
 
 export interface CharacterProfile {
   id: CharacterId;

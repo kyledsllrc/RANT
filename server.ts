@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
+import { detectUserMoodFromText } from './src/utils/mood';
 
 dotenv.config();
 
@@ -78,23 +79,94 @@ function cleanJsonText(raw: string): string {
   return cleaned.trim();
 }
 
+function getFallbackChatReply(character: CharacterConfig, mood?: string): {
+  detectedLanguage: string;
+  reply: string;
+  emotionDetected: string;
+  adviceSummary: string;
+} {
+  const normalizedMood = (mood || 'supportive').toLowerCase();
+
+  if (normalizedMood === 'angry') {
+    const reply =
+      character.id === 'man'
+        ? 'Okay, ramdam ko ang galit mo. Huminga ka muna, at pagkatapos ay sabihin mo ang pinaka-lubusang punto—para may tama tayong plano.'
+        : 'Okay, ramdam ko ang galit mo. Huminga ka muna, at sabihin mo ang totoo—hindi kita iiyak sa galit mo, tutulungan kita mag-isip ng tama.';
+
+    return {
+      detectedLanguage: 'Tagalog',
+      reply,
+      emotionDetected: 'Anger',
+      adviceSummary: 'Huminga at magplano.',
+    };
+  }
+
+  if (character.id === 'man') {
+    const reply =
+      normalizedMood === 'firm'
+        ? 'Tama na ang pag-aalala. Huminga ka muna, at tayo na mismo ang magplano ng next step.'
+        : 'Handa akong makinig. Huminga ka muna, at sabay natin lutasin ang problema mo.';
+
+    return {
+      detectedLanguage: 'Tagalog',
+      reply,
+      emotionDetected: 'Stress',
+      adviceSummary: 'Huminga ka muna.',
+    };
+  }
+
+  const reply =
+    normalizedMood === 'playful'
+      ? 'Andito ako para sa iyo, tara, huminga ka muna at sabihin mo ang totoo—tulungan kita.'
+      : 'Andito ako para sa iyo. Huminga ka nang malalim at sabihin mo ang totoo, magkasama natin aayusin ito.';
+
+  return {
+    detectedLanguage: 'Tagalog',
+    reply,
+    emotionDetected: 'Stress',
+    adviceSummary: 'Huminga ka muna.',
+  };
+}
+
 // 1. Character Chat with Language Auto-Detection & Accurate Advice
 app.post('/api/chat', async (req: Request, res: Response) => {
   try {
-    const { messages, characterId = 'grandma', voiceMode } = req.body as {
+    const { messages, characterId = 'grandma', voiceMode, mood, aiMode } = req.body as {
       messages: ChatMessage[];
       characterId?: string;
       voiceMode?: boolean;
+      mood?: string;
+      aiMode?: 'primary' | 'backup';
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Messages array is required.' });
     }
 
+    const detectedMood = detectUserMoodFromText(messages.map((m) => m.content).join(' '));
+    const effectiveMood = mood || detectedMood;
+
     const character = CHARACTERS[characterId.toLowerCase()] || CHARACTERS.grandma;
     const conversationHistory = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
 
+    if (aiMode === 'backup') {
+      const fallbackReply = getFallbackChatReply(character, effectiveMood);
+      return res.json({
+        ...fallbackReply,
+        character: {
+          id: character.id,
+          name: character.name,
+          voiceName: character.voiceName,
+          voiceStyle: character.voiceStyle,
+        },
+      });
+    }
+
     const systemPrompt = `${character.personaPrompt}
+
+Current response style: ${effectiveMood || 'supportive'} mood. Aim for that tone without drifting from the character's core personality.
+
+If the user is angry, mad, bitter, fed up, or venting, respond with controlled intensity: direct, sharp, and honest, but never demeaning or hateful toward a protected group. Keep it to 1-2 short sentences and reflect the same anger level without becoming cruel.
 
 CRITICAL RULES FOR BREVITY & STRAIGHT-TO-THE-POINT HUMAN CONNECTION:
 1. SHORT & STRAIGHT TO THE POINT (MANDATORY):
@@ -176,7 +248,16 @@ CRITICAL RULES FOR BREVITY & STRAIGHT-TO-THE-POINT HUMAN CONNECTION:
     }
 
     if (!responseText) {
-      throw lastError || new Error('All models unavailable');
+      const fallbackReply = getFallbackChatReply(character, effectiveMood);
+      return res.json({
+        ...fallbackReply,
+        character: {
+          id: character.id,
+          name: character.name,
+          voiceName: character.voiceName,
+          voiceStyle: character.voiceStyle,
+        },
+      });
     }
 
     const cleanedJson = cleanJsonText(responseText);
@@ -214,13 +295,15 @@ CRITICAL RULES FOR BREVITY & STRAIGHT-TO-THE-POINT HUMAN CONNECTION:
 // 2. Multilingual Native Speech Audio Generation using Gemini Flash TTS
 app.post('/api/tts', async (req: Request, res: Response) => {
   try {
-    const { text, characterId = 'grandma', voiceName, style, language, emotion } = req.body as {
+    const { text, characterId = 'grandma', voiceName, style, language, emotion, mood, voiceSettings } = req.body as {
       text: string;
       characterId?: string;
       voiceName?: 'Kore' | 'Zephyr' | 'Fenrir' | 'Puck' | 'Charon';
       style?: string;
       language?: string;
       emotion?: string;
+      mood?: string;
+      voiceSettings?: { speed?: number; pitch?: number; warmth?: number; accent?: 'filipino' | 'english' | 'neutral' };
     };
 
     if (!text || typeof text !== 'string') {
@@ -232,9 +315,26 @@ app.post('/api/tts', async (req: Request, res: Response) => {
 
     // Build authentic native voice style
     let chosenStyle = style;
+    const normalizedMood = (mood || 'supportive').toLowerCase();
     const isTagalog =
       (language && (language.toLowerCase().includes('tagalog') || language.toLowerCase().includes('filipino'))) ||
       /\b(po|opo|lola|lolo|anak|apo|nay|tay|mahal|kamusta|kumusta)\b/i.test(text);
+
+      if (normalizedMood === 'angry') {
+      chosenStyle = `${charConfig.voiceStyle}; voice should sound sharp, honest, and visibly irritated but still controlled and not abusive.`;
+    } else if (normalizedMood === 'angry') {
+      chosenStyle = `${charConfig.voiceStyle}; voice should sound sharp, honest, and visibly irritated but still controlled and not abusive.`;
+    } else if (normalizedMood === 'firm') {
+      chosenStyle = `${charConfig.voiceStyle}; voice should be steady, grounded, and more direct.`;
+    } else if (normalizedMood === 'playful') {
+      chosenStyle = `${charConfig.voiceStyle}; voice should feel light, friendly, and warm.`;
+    } else if (normalizedMood === 'calm') {
+      chosenStyle = `${charConfig.voiceStyle}; voice should be slower, softer, and deeply reassuring.`;
+    }
+
+    if (voiceSettings?.accent === 'english' && isTagalog) {
+      chosenStyle = `${chosenStyle}; keep the phrasing English-friendly while preserving the character tone.`;
+    }
 
     if (!chosenStyle) {
       if (isTagalog) {
