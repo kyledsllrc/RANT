@@ -4,7 +4,14 @@ import { CharacterId, CharacterProfile, CharacterMessage } from './types';
 import { CharacterSelector } from './components/CharacterSelector';
 import { SpeakingAvatar } from './components/SpeakingAvatar';
 import { ProblemChatFeed } from './components/ProblemChatFeed';
-import { VoiceRecognitionService, playWavBase64, stopCurrentAudio, speakWithBrowserSynthesis } from './utils/speech';
+import {
+  VoiceRecognitionService,
+  playAudioBase64,
+  playWavBase64,
+  stopCurrentAudio,
+  speakWithBrowserSynthesis,
+  getDetectedVoiceSummary,
+} from './utils/speech';
 import { Volume2 } from 'lucide-react';
 
 export default function App() {
@@ -19,6 +26,10 @@ export default function App() {
     },
   ]);
 
+  // Voice Engine State: Defaults to Native Filipino Voice (Likas na Tagalog)
+  const [voiceEngine, setVoiceEngine] = useState<'filipino_native' | 'gemini_studio'>('filipino_native');
+  const [activeVoiceLabel, setActiveVoiceLabel] = useState<string>('Native Filipino Voice (Likas na Tagalog)');
+
   // Audio and Speaking States
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -32,6 +43,7 @@ export default function App() {
     'Take a slow breath. You are safe and supported here.'
   );
   const [latestDetectedLanguage, setLatestDetectedLanguage] = useState<string | undefined>(undefined);
+  const [latestEmotionDetected, setLatestEmotionDetected] = useState<string | undefined>(undefined);
 
   // Speech Recognition service
   const voiceServiceRef = useRef<VoiceRecognitionService | null>(null);
@@ -39,6 +51,13 @@ export default function App() {
 
   useEffect(() => {
     voiceServiceRef.current = new VoiceRecognitionService();
+
+    getDetectedVoiceSummary().then((summary) => {
+      if (summary.voiceName) {
+        setActiveVoiceLabel(summary.voiceName);
+      }
+    });
+
     return () => {
       stopCurrentAudio();
       if (voiceServiceRef.current) {
@@ -73,12 +92,18 @@ export default function App() {
     }
   };
 
-  // Play Character Voice via TTS with Web Speech fallback
-  const playCharacterVoice = async (text: string, character: CharacterProfile, detectedLanguage?: string) => {
+  // Play Character Voice via Native Voice Engine or Gemini Studio Voice
+  const playCharacterVoice = async (
+    text: string,
+    character: CharacterProfile,
+    detectedLanguage?: string,
+    emotionDetected?: string
+  ) => {
     stopCurrentAudio();
     setIsSpeaking(true);
 
     try {
+      // 1. Primary AI Voice Engine: Dedicated Native Cloud Voice Engine (Layer 1) & Gemini Flash TTS (Layer 2)
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,14 +111,18 @@ export default function App() {
           text,
           characterId: character.id,
           voiceName: character.voiceName,
+          language: detectedLanguage || latestDetectedLanguage,
+          emotion: emotionDetected || latestEmotionDetected,
         }),
       });
 
       const data = await response.json();
 
       if (data.audioBase64) {
-        stopAudioRef.current = playWavBase64(
+        stopAudioRef.current = playAudioBase64(
           data.audioBase64,
+          data.mimeType || 'audio/mp3',
+          character.id,
           () => setIsSpeaking(true),
           () => {
             setIsSpeaking(false);
@@ -102,29 +131,34 @@ export default function App() {
             }
           }
         );
-      } else {
-        speakWithBrowserSynthesis(
-          text,
-          {
-            characterId: character.id,
-            detectedLanguage: detectedLanguage || latestDetectedLanguage,
-          },
-          () => setIsSpeaking(true),
-          () => {
-            setIsSpeaking(false);
-            if (isVoiceCallMode) {
-              startLiveListening();
-            }
-          }
-        );
+        return;
       }
-    } catch (err) {
-      console.warn('TTS playback error, fallback to browser synthesis:', err);
+
+      // 2. Backup Voice Engine: Client Speech Synthesis (Layer 3)
       speakWithBrowserSynthesis(
         text,
         {
           characterId: character.id,
           detectedLanguage: detectedLanguage || latestDetectedLanguage,
+          emotionDetected: emotionDetected || latestEmotionDetected,
+        },
+        () => setIsSpeaking(true),
+        () => {
+          setIsSpeaking(false);
+          if (isVoiceCallMode) {
+            startLiveListening();
+          }
+        }
+      );
+    } catch (err) {
+      console.warn('Primary cloud voice engine error, invoking backup client speech engine:', err);
+      // 3. Resilient Fallback: Client Speech Synthesis
+      speakWithBrowserSynthesis(
+        text,
+        {
+          characterId: character.id,
+          detectedLanguage: detectedLanguage || latestDetectedLanguage,
+          emotionDetected: emotionDetected || latestEmotionDetected,
         },
         () => setIsSpeaking(true),
         () => {
@@ -192,10 +226,11 @@ export default function App() {
       setCurrentSpeechText(replyText);
       setLatestAdviceSummary(data.adviceSummary);
       setLatestDetectedLanguage(data.detectedLanguage);
+      setLatestEmotionDetected(data.emotionDetected);
       setIsThinking(false);
 
       if (autoSpeak || isVoiceCallMode) {
-        playCharacterVoice(replyText, selectedCharacter, data.detectedLanguage);
+        playCharacterVoice(replyText, selectedCharacter, data.detectedLanguage, data.emotionDetected);
       }
     } catch (error) {
       console.error('Error getting response:', error);
@@ -210,7 +245,7 @@ export default function App() {
       };
       setMessages((prev) => [...prev, fallbackMsg]);
       setCurrentSpeechText(fallbackReply);
-      playCharacterVoice(fallbackReply, selectedCharacter, latestDetectedLanguage);
+      playCharacterVoice(fallbackReply, selectedCharacter, latestDetectedLanguage, latestEmotionDetected);
     }
   };
 
@@ -269,24 +304,52 @@ export default function App() {
   };
 
   const handleReplaySpeech = () => {
-    playCharacterVoice(currentSpeechText, selectedCharacter, latestDetectedLanguage);
+    playCharacterVoice(currentSpeechText, selectedCharacter, latestDetectedLanguage, latestEmotionDetected);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-teal-500/30 selection:text-teal-200">
       {/* Top Controls */}
-      <header className="px-4 pt-3 pb-1 flex items-center justify-end max-w-4xl mx-auto w-full">
-        <button
-          onClick={() => setAutoSpeak(!autoSpeak)}
-          className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
-            autoSpeak
-              ? 'border-teal-500/40 bg-teal-500/10 text-teal-300'
-              : 'border-slate-800 text-slate-400'
-          }`}
-        >
-          <Volume2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Voice Out:</span> {autoSpeak ? 'On' : 'Muted'}
-        </button>
+      <header className="px-4 pt-3 pb-1 flex flex-wrap items-center justify-between gap-2 max-w-4xl mx-auto w-full">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() =>
+              setVoiceEngine(voiceEngine === 'filipino_native' ? 'gemini_studio' : 'filipino_native')
+            }
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+              voiceEngine === 'filipino_native'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                : 'border-slate-800 bg-slate-900/60 text-slate-300'
+            }`}
+            title="Click to switch voice engine"
+          >
+            <span>
+              {voiceEngine === 'filipino_native'
+                ? '🇵🇭 Boses Pilipino (Native Filipino)'
+                : '🎙️ Gemini Studio Voice'}
+            </span>
+          </button>
+
+          {voiceEngine === 'filipino_native' && (
+            <span className="hidden sm:inline-block text-[11px] text-slate-400">
+              {activeVoiceLabel}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAutoSpeak(!autoSpeak)}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition ${
+              autoSpeak
+                ? 'border-teal-500/40 bg-teal-500/10 text-teal-300'
+                : 'border-slate-800 text-slate-400'
+            }`}
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Voice Out:</span> {autoSpeak ? 'On' : 'Muted'}
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -322,7 +385,10 @@ export default function App() {
           isLoading={isThinking}
           isDictating={isListening && !isVoiceCallMode}
           onToggleDictation={handleToggleDictation}
-          onPlayMessageVoice={(msg) => playCharacterVoice(msg.content, selectedCharacter, msg.detectedLanguage)}
+          onPlayMessageVoice={(msg) => {
+            const targetChar = FAMILY_CHARACTERS.find((c) => c.id === msg.characterId) || selectedCharacter;
+            playCharacterVoice(msg.content, targetChar, msg.detectedLanguage, msg.emotionDetected);
+          }}
         />
       </main>
     </div>

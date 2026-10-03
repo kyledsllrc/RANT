@@ -12,44 +12,44 @@ export const CharacterSelector: React.FC<CharacterSelectorProps> = ({
   onSelectCharacter,
 }) => {
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-2">
+    <div className="w-full max-w-xl mx-auto px-4 py-2">
       <div className="text-center mb-3">
         <h2 className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
-          Choose Who You Want To Talk With:
+          Select Voice & Companion:
         </h2>
       </div>
 
-      {/* Horizontal Scrollable or Flex Grid of Characters */}
-      <div className="flex items-center justify-start sm:justify-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+      {/* 2 Clean Companion Options: Woman & Man */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 max-w-md mx-auto">
         {FAMILY_CHARACTERS.map((char) => {
           const isSelected = char.id === selectedCharacterId;
           return (
             <button
               key={char.id}
               onClick={() => onSelectCharacter(char)}
-              className={`flex flex-col items-center gap-1.5 rounded-2xl p-2 sm:p-2.5 border transition shrink-0 ${
+              className={`flex items-center gap-3 rounded-2xl p-3 sm:p-3.5 border transition text-left cursor-pointer ${
                 isSelected
-                  ? `${char.color.border} ${char.color.bg} shadow-lg ring-2 ${char.color.ring} scale-105`
+                  ? `${char.color.border} ${char.color.bg} shadow-lg ring-2 ${char.color.ring} scale-[1.02]`
                   : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/80 opacity-75 hover:opacity-100'
               }`}
             >
-              <div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-full overflow-hidden border border-slate-700">
+              <div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-full overflow-hidden border border-slate-700 shrink-0 shadow">
                 <img
                   src={char.avatarImage}
                   alt={char.name}
                   className="h-full w-full object-cover"
                 />
-                <span className="absolute bottom-0 right-0 text-xs bg-slate-950/80 rounded-full px-1">
+                <span className="absolute bottom-0 right-0 text-sm bg-slate-950/80 rounded-full px-1">
                   {char.avatarIcon}
                 </span>
               </div>
 
-              <div className="text-center">
-                <span className={`text-xs font-semibold block ${isSelected ? char.color.accent : 'text-slate-200'}`}>
+              <div className="min-w-0 flex-1">
+                <span className={`text-base font-bold block ${isSelected ? char.color.accent : 'text-slate-100'}`}>
                   {char.name}
                 </span>
-                <span className="text-[10px] text-slate-400 hidden sm:block">
-                  {char.role.split(' ')[0]}
+                <span className="text-xs text-slate-400 block truncate">
+                  {char.role}
                 </span>
               </div>
             </button>

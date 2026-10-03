@@ -1,4 +1,4 @@
-export type CharacterId = 'grandma' | 'grandpa' | 'mother' | 'father' | 'son' | 'daughter' | 'cousin';
+export type CharacterId = 'woman' | 'man';
 
 export interface CharacterProfile {
   id: CharacterId;

@@ -111,20 +111,112 @@ export class VoiceRecognitionService {
   }
 }
 
+export interface CharacterAudioProfile {
+  id: string;
+  playbackRate: number;
+  preservesPitch: boolean;
+  filterType?: BiquadFilterType;
+  filterFreq?: number;
+  filterQ?: number;
+  gain?: number;
+  description: string;
+}
+
+export const CHARACTER_AUDIO_PROFILES: Record<string, CharacterAudioProfile> = {
+  woman: {
+    id: 'woman',
+    playbackRate: 0.95, // Warm, soothing, natural female cadence
+    preservesPitch: true, // Natural, clear female pitch
+    filterType: 'peaking',
+    filterFreq: 1200,
+    filterQ: 0.8,
+    gain: 1.05,
+    description: 'Female Voice (Babae) - Warm, empathetic & gentle voice',
+  },
+  man: {
+    id: 'man',
+    playbackRate: 0.82, // Calm, grounded male pacing
+    preservesPitch: false, // Shifts into deep, steady male baritone
+    filterType: 'peaking',
+    filterFreq: 260, // Chest resonance
+    filterQ: 1.1,
+    gain: 1.15,
+    description: 'Male Voice (Lalaki) - Steady, calm & reassuring male baritone',
+  },
+};
+
+// Aliases for compatibility
+CHARACTER_AUDIO_PROFILES.grandma = CHARACTER_AUDIO_PROFILES.woman;
+CHARACTER_AUDIO_PROFILES.mother = CHARACTER_AUDIO_PROFILES.woman;
+CHARACTER_AUDIO_PROFILES.daughter = CHARACTER_AUDIO_PROFILES.woman;
+CHARACTER_AUDIO_PROFILES.grandpa = CHARACTER_AUDIO_PROFILES.man;
+CHARACTER_AUDIO_PROFILES.father = CHARACTER_AUDIO_PROFILES.man;
+CHARACTER_AUDIO_PROFILES.son = CHARACTER_AUDIO_PROFILES.man;
+CHARACTER_AUDIO_PROFILES.cousin = CHARACTER_AUDIO_PROFILES.man;
+
 let activeAudioElement: HTMLAudioElement | null = null;
+let sharedAudioContext: AudioContext | null = null;
 
 /**
- * Plays base64 WAV audio (from Gemini TTS when available)
+ * Plays base64 MP3 or WAV audio stream directly with character vocal DSP
  */
-export function playWavBase64(
+export function playAudioBase64(
   base64Audio: string,
+  mimeType: string = 'audio/mp3',
+  characterId?: string,
   onStart?: () => void,
   onEnded?: () => void
 ): () => void {
   stopCurrentAudio();
 
-  const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+  const mime = mimeType || (base64Audio.startsWith('UklGR') ? 'audio/wav' : 'audio/mp3');
+  const audio = new Audio(`data:${mime};base64,${base64Audio}`);
   activeAudioElement = audio;
+
+  const charId = (characterId || 'grandma').toLowerCase();
+  const profile = CHARACTER_AUDIO_PROFILES[charId] || CHARACTER_AUDIO_PROFILES.grandma;
+
+  // Apply character acoustic playback rate & pitch preserve settings
+  audio.playbackRate = profile.playbackRate;
+  (audio as any).preservesPitch = profile.preservesPitch;
+  (audio as any).mozPreservesPitch = profile.preservesPitch;
+  (audio as any).webkitPreservesPitch = profile.preservesPitch;
+
+  // Enhance with Web Audio API filters for character vocal tract styling
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!sharedAudioContext || sharedAudioContext.state === 'closed') {
+        sharedAudioContext = new AudioCtx();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        sharedAudioContext.resume();
+      }
+
+      const source = sharedAudioContext.createMediaElementSource(audio);
+      let lastNode: AudioNode = source;
+
+      if (profile.filterType && profile.filterFreq) {
+        const filter = sharedAudioContext.createBiquadFilter();
+        filter.type = profile.filterType;
+        filter.frequency.value = profile.filterFreq;
+        if (profile.filterQ) filter.Q.value = profile.filterQ;
+        lastNode.connect(filter);
+        lastNode = filter;
+      }
+
+      if (profile.gain && profile.gain !== 1.0) {
+        const gainNode = sharedAudioContext.createGain();
+        gainNode.gain.value = profile.gain;
+        lastNode.connect(gainNode);
+        lastNode = gainNode;
+      }
+
+      lastNode.connect(sharedAudioContext.destination);
+    }
+  } catch (audioCtxErr) {
+    // Media element source already attached or not supported; standard audio playback continues smoothly
+  }
 
   audio.onplay = () => {
     if (onStart) onStart();
@@ -153,6 +245,12 @@ export function playWavBase64(
   };
 }
 
+export const playWavBase64 = (
+  base64Audio: string,
+  onStart?: () => void,
+  onEnded?: () => void
+) => playAudioBase64(base64Audio, 'audio/wav', 'grandma', onStart, onEnded);
+
 /**
  * Stops any actively playing audio or speech synthesis
  */
@@ -171,7 +269,6 @@ interface LanguageSpec {
   code: string;
   tags: string[];
   keywords: string[];
-  phoneticSiblings?: string[]; // Closer phonetic matching for regional dialects
 }
 
 const LANGUAGE_SPECS: Record<string, LanguageSpec> = {
@@ -179,13 +276,11 @@ const LANGUAGE_SPECS: Record<string, LanguageSpec> = {
     code: 'fil-PH',
     tags: ['fil-ph', 'tl-ph', 'fil', 'tl'],
     keywords: ['tagalog', 'filipino', 'philippines', 'fil-ph', 'tl-ph', 'blessica', 'angelo', 'mabuhay'],
-    phoneticSiblings: ['id-id', 'ms-my', 'es-es', 'es-mx'], // Indonesian/Spanish vowel systems match Tagalog phonetics beautifully
   },
   filipino: {
     code: 'fil-PH',
     tags: ['fil-ph', 'tl-ph', 'fil', 'tl'],
     keywords: ['tagalog', 'filipino', 'philippines', 'fil-ph', 'tl-ph', 'blessica', 'angelo', 'mabuhay'],
-    phoneticSiblings: ['id-id', 'ms-my', 'es-es', 'es-mx'],
   },
   spanish: {
     code: 'es-ES',
@@ -316,22 +411,29 @@ export async function getLoadedVoices(): Promise<SpeechSynthesisVoice[]> {
 export interface SynthesisOptions {
   characterId?: string;
   detectedLanguage?: string;
+  emotionDetected?: string;
 }
 
 /**
- * Formats written response into natural spoken cadence with breath pauses
+ * Formats written response into natural spoken human cadence with gentle breath pauses
  */
-function prepareTextForSpeech(text: string): string {
-  return text
-    .replace(/[*#_~`]/g, '')
+function prepareTextForSpeech(text: string, emotion?: string): string {
+  let cleaned = text.replace(/[*#_~`]/g, '').trim();
+
+  // Natural affectionate human pauses after greetings and comforting phrases
+  cleaned = cleaned
+    .replace(/\b(apo ko|apo|anak ko|anak|sweetheart|honey|darling|mi amor|mi vida|mi niño|mi niña|iho|iha)\b([,.]?)/gi, '$1... ')
+    .replace(/\b(halika rito|come here|ven aquí|listen to me|makinig ka|andito lang si lola|andito si mama|andito si papa)\b([,.]?)/gi, '$1... ')
+    .replace(/\b(huminga ka nang malalim|take a deep breath|respira hondo|take a breath)\b([,.]?)/gi, '$1... ')
     .replace(/([.?!])\s+/g, '$1... ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/\s+/g, ' ');
+
+  return cleaned.trim();
 }
 
 /**
- * High-Fluency Multilingual Speech Synthesis
- * Matches native voices for Tagalog, Spanish, English, etc. with persona pitch/rate.
+ * High-Fluency Multilingual Speech Synthesis with Human Emotional Realism
+ * Matches native voices for Tagalog, Spanish, English, etc. with emotional persona pitch/rate.
  */
 export async function speakWithBrowserSynthesis(
   text: string,
@@ -346,45 +448,59 @@ export async function speakWithBrowserSynthesis(
 
   stopCurrentAudio();
 
-  const formattedText = prepareTextForSpeech(text);
+  const formattedText = prepareTextForSpeech(text, options?.emotionDetected);
   const utterance = new SpeechSynthesisUtterance(formattedText);
 
   const langSpec = resolveLanguageSpec(options?.detectedLanguage, formattedText);
   utterance.lang = langSpec.code;
 
-  // Character specific vocal cadence: warm, paced, gentle
-  const charId = (options?.characterId || 'grandma').toLowerCase();
-  const isFemale = charId === 'grandma' || charId === 'mother' || charId === 'daughter';
+  // Character specific vocal cadence: Woman vs Man
+  const charId = (options?.characterId || 'woman').toLowerCase();
+  const isFemale = charId === 'woman' || charId === 'grandma' || charId === 'mother' || charId === 'daughter';
 
-  if (charId === 'grandma') {
-    utterance.rate = 0.86; // Gentle, maternal, elder comforting cadence
-    utterance.pitch = 1.05;
-  } else if (charId === 'grandpa') {
-    utterance.rate = 0.82; // Deep, patient, grounded
-    utterance.pitch = 0.85;
-  } else if (charId === 'mother') {
-    utterance.rate = 0.90; // Caring, clear, soothing
-    utterance.pitch = 1.08;
-  } else if (charId === 'father') {
-    utterance.rate = 0.88; // Steady, calm, protective
-    utterance.pitch = 0.88;
-  } else if (charId === 'son') {
-    utterance.rate = 0.96; // Youthful, earnest
-    utterance.pitch = 1.15;
-  } else if (charId === 'daughter') {
-    utterance.rate = 0.94; // Sweet, bright, tender
-    utterance.pitch = 1.20;
-  } else {
-    // cousin
-    utterance.rate = 0.98;
-    utterance.pitch = 1.0;
+  let rate = isFemale ? 0.92 : 0.84;
+  let pitch = isFemale ? 1.05 : 0.76;
+
+  // Emotional Modulation: dynamically tune voice to emotional distress
+  const em = (options?.emotionDetected || '').toLowerCase();
+  if (
+    em.includes('grief') ||
+    em.includes('sadness') ||
+    em.includes('heartbreak') ||
+    em.includes('shame') ||
+    em.includes('crying') ||
+    em.includes('failure')
+  ) {
+    // Slower, tender whisper-like comforting embrace
+    rate = Math.max(0.76, rate - 0.05);
+    pitch = pitch * 0.98;
+  } else if (
+    em.includes('anxiety') ||
+    em.includes('panic') ||
+    em.includes('fear') ||
+    em.includes('overwhelm') ||
+    em.includes('stress')
+  ) {
+    // Slow, reassuring, grounded pacing to soothe nervous system
+    rate = Math.max(0.78, rate - 0.04);
+  } else if (
+    em.includes('exhaustion') ||
+    em.includes('burnout') ||
+    em.includes('tired') ||
+    em.includes('fatigue')
+  ) {
+    // Gentle, unhurried cadence
+    rate = Math.max(0.78, rate - 0.03);
   }
+
+  utterance.rate = rate;
+  utterance.pitch = pitch;
 
   // Load voices reliably
   const voices = await getLoadedVoices();
 
   // Step 1: Look for direct native voices matching this language (e.g. fil-PH, tl-PH)
-  let matchingVoices = voices.filter((v) => {
+  const matchingVoices = voices.filter((v) => {
     const vLang = v.lang.toLowerCase();
     const vName = v.name.toLowerCase();
     return (
@@ -392,18 +508,6 @@ export async function speakWithBrowserSynthesis(
       langSpec.keywords.some((k) => vName.includes(k) || vLang.includes(k))
     );
   });
-
-  // Step 2: If no direct voice exists for Tagalog on this device, check phonetic siblings (Indonesian / Spanish)
-  if (matchingVoices.length === 0 && langSpec.phoneticSiblings) {
-    matchingVoices = voices.filter((v) => {
-      const vLang = v.lang.toLowerCase();
-      return langSpec.phoneticSiblings!.some((sib) => vLang.startsWith(sib));
-    });
-    if (matchingVoices.length > 0) {
-      // Set utterance language to the phonetic sibling so the browser uses proper open vowel phonetics
-      utterance.lang = matchingVoices[0].lang;
-    }
-  }
 
   if (matchingVoices.length > 0) {
     // Select voice matching gender / character preference
@@ -435,7 +539,9 @@ export async function speakWithBrowserSynthesis(
       }
     });
 
-    utterance.voice = genderedVoice || matchingVoices[0];
+    const selectedVoice = genderedVoice || matchingVoices[0];
+    utterance.voice = selectedVoice;
+    utterance.lang = selectedVoice.lang;
   } else {
     // Fallback to highest quality natural voice available
     const naturalVoice = voices.find(
@@ -446,6 +552,7 @@ export async function speakWithBrowserSynthesis(
     );
     if (naturalVoice) {
       utterance.voice = naturalVoice;
+      utterance.lang = naturalVoice.lang;
     }
   }
 
@@ -468,4 +575,38 @@ export async function speakWithBrowserSynthesis(
   };
 
   window.speechSynthesis.speak(utterance);
+}
+
+/**
+ * Returns summary of the best available Filipino / native voice on the device
+ */
+export async function getDetectedVoiceSummary(detectedLang?: string): Promise<{
+  voiceName: string;
+  isNativeFilipino: boolean;
+  engineType: string;
+}> {
+  const voices = await getLoadedVoices();
+  const directFil = voices.find(
+    (v) =>
+      v.lang.toLowerCase().startsWith('fil') ||
+      v.lang.toLowerCase().startsWith('tl') ||
+      v.name.toLowerCase().includes('filipino') ||
+      v.name.toLowerCase().includes('tagalog') ||
+      v.name.toLowerCase().includes('blessica') ||
+      v.name.toLowerCase().includes('angelo')
+  );
+
+  if (directFil) {
+    return {
+      voiceName: directFil.name,
+      isNativeFilipino: true,
+      engineType: 'Device Native Filipino Voice (Likas na Tagalog)',
+    };
+  }
+
+  return {
+    voiceName: 'Dedicated Cloud Filipino Voice AI (Likas na Tagalog)',
+    isNativeFilipino: true,
+    engineType: 'Cloud Native Filipino Neural Voice',
+  };
 }
