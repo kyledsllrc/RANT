@@ -275,12 +275,56 @@ const LANGUAGE_SPECS: Record<string, LanguageSpec> = {
   tagalog: {
     code: 'fil-PH',
     tags: ['fil-ph', 'tl-ph', 'fil', 'tl'],
-    keywords: ['tagalog', 'filipino', 'philippines', 'fil-ph', 'tl-ph', 'blessica', 'angelo', 'mabuhay'],
+    keywords: [
+      'tagalog',
+      'filipino',
+      'philippines',
+      'fil-ph',
+      'tl-ph',
+      'blessica',
+      'angelo',
+      'mabuhay',
+      'kumusta',
+      'po',
+      'opo',
+      'sige',
+      'salamat',
+      'mahal',
+      'hindi',
+      'bukas',
+      'tulong',
+      'namin',
+      'gusto',
+      'mayroon',
+      'gising',
+    ],
   },
   filipino: {
     code: 'fil-PH',
     tags: ['fil-ph', 'tl-ph', 'fil', 'tl'],
-    keywords: ['tagalog', 'filipino', 'philippines', 'fil-ph', 'tl-ph', 'blessica', 'angelo', 'mabuhay'],
+    keywords: [
+      'tagalog',
+      'filipino',
+      'philippines',
+      'fil-ph',
+      'tl-ph',
+      'blessica',
+      'angelo',
+      'mabuhay',
+      'kumusta',
+      'po',
+      'opo',
+      'sige',
+      'salamat',
+      'mahal',
+      'hindi',
+      'bukas',
+      'tulong',
+      'namin',
+      'gusto',
+      'mayroon',
+      'gising',
+    ],
   },
   spanish: {
     code: 'es-ES',
@@ -363,7 +407,16 @@ export function resolveLanguageSpec(langName?: string, text?: string): LanguageS
       t.includes(' mahal ') ||
       t.includes(' kita ') ||
       t.includes(' anak ') ||
-      t.includes(' yakap ')
+      t.includes(' yakap ') ||
+      t.includes(' kumusta ') ||
+      t.includes(' salamat ') ||
+      t.includes(' sige ') ||
+      t.includes(' tulong ') ||
+      t.includes(' gusto ') ||
+      t.includes(' mayroon ') ||
+      t.includes(' maganda ') ||
+      t.includes(' umiyak ') ||
+      t.includes(' problema ')
     ) {
       return LANGUAGE_SPECS.tagalog;
     }
@@ -434,18 +487,41 @@ export function resolveCharacterVoiceConfig(characterId?: string, detectedLangua
     normalized === 'mother' ||
     normalized === 'daughter';
 
-  const tagalog = (detectedLanguage || '').toLowerCase().includes('tagalog') || (detectedLanguage || '').toLowerCase().includes('filipino');
+  const languageText = (detectedLanguage || '').toLowerCase();
+  const tagalog =
+    languageText.includes('tagalog') ||
+    languageText.includes('filipino') ||
+    languageText.includes('fil-ph') ||
+    languageText.includes('tl-ph');
 
   if (isFemale) {
     return {
       gender: 'female',
-      voiceNames: tagalog ? ['Kore', 'Samantha', 'Google UK English Female', 'Google US English Female'] : ['Kore', 'Samantha', 'Google UK English Female'],
+      voiceNames: tagalog
+        ? [
+            'Google Filipino Female',
+            'Filipino Female',
+            'Kore',
+            'Samantha',
+            'Google UK English Female',
+            'Google US English Female',
+          ]
+        : ['Kore', 'Samantha', 'Google UK English Female', 'Google US English Female'],
     };
   }
 
   return {
     gender: 'male',
-    voiceNames: tagalog ? ['Fenrir', 'Zephyr', 'Google UK English Male', 'Google US English Male'] : ['Fenrir', 'Zephyr', 'Google UK English Male'],
+    voiceNames: tagalog
+      ? [
+          'Google Filipino Male',
+          'Filipino Male',
+          'Fenrir',
+          'Zephyr',
+          'Google UK English Male',
+          'Google US English Male',
+        ]
+      : ['Fenrir', 'Zephyr', 'Google UK English Male', 'Google US English Male'],
   };
 }
 
@@ -498,6 +574,11 @@ export async function speakWithBrowserSynthesis(
 
   let rate = (isFemale ? 0.92 : 0.84) * speedMultiplier;
   let pitch = (isFemale ? 1.05 : 0.76) * pitchMultiplier;
+
+  if (langSpec.code === 'fil-PH') {
+    rate *= 0.92;
+    pitch *= 1.04;
+  }
 
   if (mood === 'firm') {
     rate *= 0.96;
@@ -559,9 +640,14 @@ export async function speakWithBrowserSynthesis(
   const matchingVoices = voices.filter((v) => {
     const vLang = v.lang.toLowerCase();
     const vName = v.name.toLowerCase();
+    const isNativeFilipinoMatch =
+      langSpec.code === 'fil-PH' &&
+      (vLang.includes('fil') || vLang.includes('tl') || vName.includes('filipino') || vName.includes('tagalog') || vName.includes('ph'));
+
     return (
       langSpec.tags.some((tag) => vLang.startsWith(tag)) ||
-      langSpec.keywords.some((k) => vName.includes(k) || vLang.includes(k))
+      langSpec.keywords.some((k) => vName.includes(k) || vLang.includes(k)) ||
+      isNativeFilipinoMatch
     );
   });
 
@@ -575,6 +661,19 @@ export async function speakWithBrowserSynthesis(
       ) ||
       matchingVoices.find((v) => {
         const name = v.name.toLowerCase();
+        if (langSpec.code === 'fil-PH') {
+          return (
+            name.includes('filipino') ||
+            name.includes('tagalog') ||
+            name.includes('fil') ||
+            name.includes('tl') ||
+            name.includes('blessica') ||
+            name.includes('angelo') ||
+            name.includes('maria') ||
+            name.includes('katrina')
+          );
+        }
+
         if (isFemale) {
           return (
             name.includes('female') ||

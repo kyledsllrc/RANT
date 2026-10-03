@@ -295,7 +295,7 @@ CRITICAL RULES FOR BREVITY & STRAIGHT-TO-THE-POINT HUMAN CONNECTION:
 // 2. Multilingual Native Speech Audio Generation using Gemini Flash TTS
 app.post('/api/tts', async (req: Request, res: Response) => {
   try {
-    const { text, characterId = 'grandma', voiceName, style, language, emotion, mood, voiceSettings } = req.body as {
+    const { text, characterId = 'grandma', voiceName, style, language, emotion, mood, voiceSettings, voiceEngine } = req.body as {
       text: string;
       characterId?: string;
       voiceName?: 'Kore' | 'Zephyr' | 'Fenrir' | 'Puck' | 'Charon';
@@ -304,6 +304,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
       emotion?: string;
       mood?: string;
       voiceSettings?: { speed?: number; pitch?: number; warmth?: number; accent?: 'filipino' | 'english' | 'neutral' };
+      voiceEngine?: 'filipino_native' | 'filipino_ai' | 'gemini_studio';
     };
 
     if (!text || typeof text !== 'string') {
@@ -320,9 +321,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
       (language && (language.toLowerCase().includes('tagalog') || language.toLowerCase().includes('filipino'))) ||
       /\b(po|opo|lola|lolo|anak|apo|nay|tay|mahal|kamusta|kumusta)\b/i.test(text);
 
-      if (normalizedMood === 'angry') {
-      chosenStyle = `${charConfig.voiceStyle}; voice should sound sharp, honest, and visibly irritated but still controlled and not abusive.`;
-    } else if (normalizedMood === 'angry') {
+    if (normalizedMood === 'angry') {
       chosenStyle = `${charConfig.voiceStyle}; voice should sound sharp, honest, and visibly irritated but still controlled and not abusive.`;
     } else if (normalizedMood === 'firm') {
       chosenStyle = `${charConfig.voiceStyle}; voice should be steady, grounded, and more direct.`;
@@ -330,6 +329,14 @@ app.post('/api/tts', async (req: Request, res: Response) => {
       chosenStyle = `${charConfig.voiceStyle}; voice should feel light, friendly, and warm.`;
     } else if (normalizedMood === 'calm') {
       chosenStyle = `${charConfig.voiceStyle}; voice should be slower, softer, and deeply reassuring.`;
+    }
+
+    if (isTagalog) {
+      const tagalogStyle =
+        charConfig.id === 'woman'
+          ? 'Natural Filipino woman voice from the Philippines, warm, clear, and conversational; use everyday Filipino phrasing with a soft but confident female tone.'
+          : 'Natural Filipino man voice from the Philippines, grounded, steady, and warm; use everyday Filipino phrasing with a calm male resonance.';
+      chosenStyle = `${chosenStyle || charConfig.voiceStyle}; ${tagalogStyle}`;
     }
 
     if (voiceSettings?.accent === 'english' && isTagalog) {
@@ -349,7 +356,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     }
 
     // AI LAYER 1 (FOR FILIPINO): Dedicated High-Fluency Native Filipino Speech Engine
-    if (isTagalog) {
+    if (isTagalog && (voiceEngine === 'filipino_native' || voiceEngine === 'filipino_ai')) {
       try {
         const cleanForSpeech = text.replace(/[*#_~`]/g, '').trim();
         const sentenceChunks = cleanForSpeech.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanForSpeech];
@@ -387,6 +394,12 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     }
 
     const safeText = text.slice(0, 1000);
+    const effectiveVoiceName =
+      isTagalog && charConfig.id === 'woman'
+        ? 'Kore'
+        : isTagalog && charConfig.id === 'man'
+        ? 'Fenrir'
+        : chosenVoice;
 
     // AI LAYER 2: Gemini Flash TTS Neural Models (gemini-3.8-flash-tts -> gemini-3.8-flash-lite-tts)
     const ttsModels = ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'];
@@ -414,7 +427,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
             responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: chosenVoice },
+                prebuiltVoiceConfig: { voiceName: effectiveVoiceName },
               },
             },
           },
