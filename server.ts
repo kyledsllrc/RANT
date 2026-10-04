@@ -317,9 +317,13 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     // Build authentic native voice style
     let chosenStyle = style;
     const normalizedMood = (mood || 'supportive').toLowerCase();
+    const languageCode = (language || '').toLowerCase();
     const isTagalog =
-      (language && (language.toLowerCase().includes('tagalog') || language.toLowerCase().includes('filipino'))) ||
-      /\b(po|opo|lola|lolo|anak|apo|nay|tay|mahal|kamusta|kumusta)\b/i.test(text);
+      languageCode.includes('tagalog') ||
+      languageCode.includes('filipino') ||
+      languageCode.includes('fil-ph') ||
+      languageCode.includes('tl-ph') ||
+      /\b(po|opo|lola|lolo|anak|apo|nay|tay|mahal|kamusta|kumusta|ako|ikaw|hindi|salamat|sige|makinig|sabihin|aayusin|andito|natin|problema)\b|sa'?yo|sa akin/i.test(text);
 
     if (normalizedMood === 'angry') {
       chosenStyle = `${charConfig.voiceStyle}; voice should sound sharp, honest, and visibly irritated but still controlled and not abusive.`;
@@ -334,8 +338,8 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     if (isTagalog) {
       const tagalogStyle =
         charConfig.id === 'woman'
-          ? 'Natural Filipino woman voice from the Philippines, warm, clear, and conversational; use everyday Filipino phrasing with a soft but confident female tone.'
-          : 'Natural Filipino man voice from the Philippines, grounded, steady, and warm; use everyday Filipino phrasing with a calm male resonance.';
+          ? 'Speak fluent, natural conversational Filipino (Tagalog) as spoken in the Philippines. Use native Filipino pronunciation, connected phrasing, and natural sentence rhythm. Keep a warm, clear adult female voice; do not sound like a language lesson or an English speaker reading Tagalog.'
+          : 'Speak fluent, natural conversational Filipino (Tagalog) as spoken in the Philippines. Use native Filipino pronunciation, connected phrasing, and natural sentence rhythm. Keep a grounded adult male voice; do not sound like a language lesson or an English speaker reading Tagalog.';
       chosenStyle = `${chosenStyle || charConfig.voiceStyle}; ${tagalogStyle}`;
     }
 
@@ -356,7 +360,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
     }
 
     // AI LAYER 1 (FOR FILIPINO): Dedicated High-Fluency Native Filipino Speech Engine
-    if (isTagalog && (voiceEngine === 'filipino_native' || voiceEngine === 'filipino_ai')) {
+    if (isTagalog && voiceEngine === 'filipino_native') {
       try {
         const cleanForSpeech = text.replace(/[*#_~`]/g, '').trim();
         const sentenceChunks = cleanForSpeech.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleanForSpeech];
@@ -402,7 +406,7 @@ app.post('/api/tts', async (req: Request, res: Response) => {
         : chosenVoice;
 
     // AI LAYER 2: Gemini Flash TTS Neural Models (gemini-3.8-flash-tts -> gemini-3.8-flash-lite-tts)
-    const ttsModels = ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'];
+    const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'];
     let base64Audio: string | null = null;
     let successfulModel: string = 'gemini-3.8-flash-tts';
 
@@ -415,7 +419,9 @@ app.post('/api/tts', async (req: Request, res: Response) => {
               role: 'user',
               parts: [
                 {
-                  text: safeText,
+                  text: isTagalog && voiceEngine === 'filipino_ai'
+                    ? `${chosenStyle}. Read only this exact text aloud without translating or adding words: ${safeText}`
+                    : safeText,
                   speechMetadata: {
                     style: chosenStyle,
                   },

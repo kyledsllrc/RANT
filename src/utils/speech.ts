@@ -125,8 +125,8 @@ export interface CharacterAudioProfile {
 export const CHARACTER_AUDIO_PROFILES: Record<string, CharacterAudioProfile> = {
   woman: {
     id: 'woman',
-    playbackRate: 0.95, // Warm, soothing, natural female cadence
-    preservesPitch: true, // Natural, clear female pitch
+    playbackRate: 0.98,
+    preservesPitch: true,
     filterType: 'peaking',
     filterFreq: 1200,
     filterQ: 0.8,
@@ -135,8 +135,8 @@ export const CHARACTER_AUDIO_PROFILES: Record<string, CharacterAudioProfile> = {
   },
   man: {
     id: 'man',
-    playbackRate: 0.82, // Calm, grounded male pacing
-    preservesPitch: false, // Shifts into deep, steady male baritone
+    playbackRate: 0.98,
+    preservesPitch: true,
     filterType: 'peaking',
     filterFreq: 260, // Chest resonance
     filterQ: 1.1,
@@ -394,30 +394,7 @@ export function resolveLanguageSpec(langName?: string, text?: string): LanguageS
   // Quick heuristic check on words
   if (text) {
     const t = ` ${text.toLowerCase()} `;
-    if (
-      t.includes(' po ') ||
-      t.includes(' opo ') ||
-      t.includes(' lola ') ||
-      t.includes(' lolo ') ||
-      t.includes(' ako ') ||
-      t.includes(' ikaw ') ||
-      t.includes(' hindi ') ||
-      t.includes(' sobrang ') ||
-      t.includes(' dahil ') ||
-      t.includes(' mahal ') ||
-      t.includes(' kita ') ||
-      t.includes(' anak ') ||
-      t.includes(' yakap ') ||
-      t.includes(' kumusta ') ||
-      t.includes(' salamat ') ||
-      t.includes(' sige ') ||
-      t.includes(' tulong ') ||
-      t.includes(' gusto ') ||
-      t.includes(' mayroon ') ||
-      t.includes(' maganda ') ||
-      t.includes(' umiyak ') ||
-      t.includes(' problema ')
-    ) {
+    if (/\b(po|opo|lola|lolo|ako|ikaw|kami|tayo|siya|hindi|sobrang|dahil|mahal|kita|anak|yakap|kumusta|salamat|sige|tulong|gusto|mayroon|maganda|umiyak|problema|makinig|sabihin|aayusin|andito|natin)\b|sa'?yo|sa akin/i.test(t)) {
       return LANGUAGE_SPECS.tagalog;
     }
     if (
@@ -528,18 +505,8 @@ export function resolveCharacterVoiceConfig(characterId?: string, detectedLangua
 /**
  * Formats written response into natural spoken human cadence with gentle breath pauses
  */
-function prepareTextForSpeech(text: string, emotion?: string): string {
-  let cleaned = text.replace(/[*#_~`]/g, '').trim();
-
-  // Natural affectionate human pauses after greetings and comforting phrases
-  cleaned = cleaned
-    .replace(/\b(apo ko|apo|anak ko|anak|sweetheart|honey|darling|mi amor|mi vida|mi niño|mi niña|iho|iha)\b([,.]?)/gi, '$1... ')
-    .replace(/\b(halika rito|come here|ven aquí|listen to me|makinig ka|andito lang si lola|andito si mama|andito si papa)\b([,.]?)/gi, '$1... ')
-    .replace(/\b(huminga ka nang malalim|take a deep breath|respira hondo|take a breath)\b([,.]?)/gi, '$1... ')
-    .replace(/([.?!])\s+/g, '$1... ')
-    .replace(/\s+/g, ' ');
-
-  return cleaned.trim();
+function prepareTextForSpeech(text: string): string {
+  return text.replace(/[*#_~`]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -559,7 +526,7 @@ export async function speakWithBrowserSynthesis(
 
   stopCurrentAudio();
 
-  const formattedText = prepareTextForSpeech(text, options?.emotionDetected);
+  const formattedText = prepareTextForSpeech(text);
   const utterance = new SpeechSynthesisUtterance(formattedText);
 
   const langSpec = resolveLanguageSpec(options?.detectedLanguage, formattedText);
@@ -572,12 +539,11 @@ export async function speakWithBrowserSynthesis(
   const warmthBoost = options?.voiceSettings?.warmth ?? 1;
   const mood = (options?.mood || 'supportive').toLowerCase();
 
-  let rate = (isFemale ? 0.92 : 0.84) * speedMultiplier;
-  let pitch = (isFemale ? 1.05 : 0.76) * pitchMultiplier;
+  let rate = (isFemale ? 0.96 : 0.93) * speedMultiplier;
+  let pitch = pitchMultiplier;
 
   if (langSpec.code === 'fil-PH') {
-    rate *= 0.92;
-    pitch *= 1.04;
+    rate *= 0.98;
   }
 
   if (mood === 'firm') {
@@ -626,7 +592,7 @@ export async function speakWithBrowserSynthesis(
     rate = Math.max(0.78, rate - 0.03);
   }
 
-  utterance.rate = Math.min(Math.max(rate, 0.7), 1.7);
+  utterance.rate = Math.min(Math.max(rate, 0.8), 1.7);
   utterance.pitch = Math.min(Math.max(pitch, 0.5), 2);
 
   if (warmthBoost >= 1.1) {
@@ -661,42 +627,16 @@ export async function speakWithBrowserSynthesis(
       ) ||
       matchingVoices.find((v) => {
         const name = v.name.toLowerCase();
-        if (langSpec.code === 'fil-PH') {
-          return (
-            name.includes('filipino') ||
-            name.includes('tagalog') ||
-            name.includes('fil') ||
-            name.includes('tl') ||
-            name.includes('blessica') ||
-            name.includes('angelo') ||
-            name.includes('maria') ||
-            name.includes('katrina')
-          );
-        }
-
         if (isFemale) {
           return (
-            name.includes('female') ||
-            name.includes('woman') ||
-            name.includes('girl') ||
-            name.includes('blessica') ||
-            name.includes('maria') ||
-            name.includes('monica') ||
-            name.includes('paulina') ||
-            name.includes('rosa') ||
-            name.includes('gadis') ||
-            name.includes('siti')
+            /\b(female|woman|girl)\b/.test(name) ||
+            ['blessica', 'maria', 'katrina', 'monica', 'paulina', 'rosa'].some((hint) => name.includes(hint))
           );
         }
 
         return (
-          name.includes('male') ||
-          name.includes('man') ||
-          name.includes('boy') ||
-          name.includes('angelo') ||
-          name.includes('jorge') ||
-          name.includes('diego') ||
-          name.includes('budi')
+          /\b(male|man|boy)\b/.test(name) ||
+          ['angelo', 'jorge', 'diego', 'budi'].some((hint) => name.includes(hint))
         );
       });
 

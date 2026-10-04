@@ -11,26 +11,29 @@ import {
   stopCurrentAudio,
   speakWithBrowserSynthesis,
   getDetectedVoiceSummary,
+  resolveLanguageSpec,
 } from './utils/speech';
 import { detectUserMoodFromText } from './utils/mood';
 import { Volume2 } from 'lucide-react';
 
 export function ensureSingleGreeting(messages: CharacterMessage[], character: CharacterProfile): CharacterMessage[] {
-  const greetingText = character.greeting.trim();
+  const greetingTexts = new Set(FAMILY_CHARACTERS.map((profile) => profile.greeting.trim()));
+  const greetingIndex = messages.findIndex(
+    (message) => message.role === 'assistant' && greetingTexts.has(message.content.trim())
+  );
   const cleanMessages = messages.filter(
-    (msg) => !(msg.role === 'assistant' && msg.characterId === character.id && msg.content === greetingText)
+    (message) => !(message.role === 'assistant' && greetingTexts.has(message.content.trim()))
   );
 
-  return [
-    ...cleanMessages,
-    {
-      id: 'initial-greeting',
-      role: 'assistant',
-      characterId: character.id,
-      content: greetingText,
-      timestamp: Date.now(),
-    },
-  ];
+  cleanMessages.splice(Math.min(greetingIndex < 0 ? 0 : greetingIndex, cleanMessages.length), 0, {
+    id: 'initial-greeting',
+    role: 'assistant',
+    characterId: character.id,
+    content: character.greeting.trim(),
+    timestamp: Date.now(),
+  });
+
+  return cleanMessages;
 }
 
 export default function App() {
@@ -159,28 +162,7 @@ export default function App() {
     setIsSpeaking(true);
 
     try {
-      if (voiceEngine === 'filipino_native' || voiceEngine === 'filipino_ai') {
-        speakWithBrowserSynthesis(
-          text,
-          {
-            characterId: character.id,
-            detectedLanguage: detectedLanguage || latestDetectedLanguage,
-            emotionDetected: emotionDetected || latestEmotionDetected,
-            mood: selectedMood,
-            voiceSettings,
-          },
-          () => setIsSpeaking(true),
-          () => {
-            setIsSpeaking(false);
-            if (isVoiceCallMode) {
-              startLiveListening();
-            }
-          }
-        );
-        return;
-      }
-
-      // 1. Primary AI Voice Engine: Dedicated Native Cloud Voice Engine (Layer 1) & Gemini Flash TTS (Layer 2)
+      // Cloud speech is the primary path; browser synthesis is only a fallback.
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -188,7 +170,10 @@ export default function App() {
           text,
           characterId: character.id,
           voiceName: character.voiceName,
-          language: detectedLanguage || latestDetectedLanguage,
+          language:
+            detectedLanguage ||
+            latestDetectedLanguage ||
+            (resolveLanguageSpec(undefined, text).code === 'fil-PH' ? 'Tagalog' : undefined),
           emotion: emotionDetected || latestEmotionDetected,
           mood: selectedMood,
           voiceEngine,
